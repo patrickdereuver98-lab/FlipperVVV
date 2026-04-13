@@ -351,8 +351,11 @@ def compute_flips(mapping, latest, vol5m, vol1h, cash_stack,
 
         v5  = vol5m.get(sid, {})
         v1  = vol1h.get(sid, {})
-        vol_5m  = (v5.get("highVolume") or 0) + (v5.get("lowVolume") or 0)
-        vol_1h  = (v1.get("highVolume") or 0) + (v1.get("lowVolume") or 0)
+        
+        # AANGEPAST: correcte API keys voor het uitlezen van het volume
+        vol_5m  = (v5.get("highPriceVolume") or 0) + (v5.get("lowPriceVolume") or 0)
+        vol_1h  = (v1.get("highPriceVolume") or 0) + (v1.get("lowPriceVolume") or 0)
+        
         vol_use = vol_1h if vol_1h > 0 else vol_5m
         if vol_use < min_vol:
             continue
