@@ -238,7 +238,7 @@ GE_TAX_RATE        = 0.02
 GE_TAX_CAP         = 5_000_000
 MAX_PRICE_FOR_TAX  = 250_000_000
 WIKI_HEADERS       = {"User-Agent": "OSRS-GE-Flip-Advisor/2.0 (streamlit; github.com)"}
-BASE_API           = "https://prices.runescape.wiki/api/v1"
+BASE_API           = "prices.runescape.wiki/api/v1/osrs"
 WIKI_ICON_URL      = "https://oldschool.runescape.wiki/images/{}"
 WIKI_ITEM_URL      = "https://oldschool.runescape.wiki/w/{}"
 
