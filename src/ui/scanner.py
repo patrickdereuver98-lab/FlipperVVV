@@ -12,18 +12,6 @@ from src.engine.formulas import fmt_gp, fmt_pct
 from src.ui.components import render_item_detail
 from src.ui.styles import section_label
 
-
-# Columns shown in the scanner table (subset of full df)
-_TABLE_COLS = {
-    "name":       "Item",
-    "margin":     "Margin",
-    "roi":        "ROI %",
-    "vol_1h":     "Vol 1h",
-    "pot_profit": "Max Profit",
-    "smart_score":"Score",
-}
-
-
 def render(df_all: pd.DataFrame, prof: dict) -> None:
     """
     Render the Scanner tab.
@@ -37,6 +25,7 @@ def render(df_all: pd.DataFrame, prof: dict) -> None:
         st.info("No items match the current filters. Adjust your capital or filters.", icon="ℹ")
         return
 
+    # Sorteer altijd eerst op Smart Score
     df_view = df_all.sort_values("smart_score", ascending=False).reset_index(drop=True)
 
     # ── Toolbar ──────────────────────────────────────────────────────────
@@ -44,54 +33,46 @@ def render(df_all: pd.DataFrame, prof: dict) -> None:
     with tb_l:
         st.markdown(
             f'<span class="ef-muted">'
-            f'Showing top <strong style="color:#E5E7EB;">{min(50, len(df_view))}</strong> of '
-            f'<strong style="color:#E5E7EB;">{len(df_view)}</strong> qualifying items'
+            f'Showing top 100 opportunities sorted by Smart Score.'
             f'</span>',
-            unsafe_allow_html=True,
+            unsafe_allow_html=True
         )
-    with tb_r:
-        sort_col = st.selectbox(
-            "Sort by",
-            ["Smart Score", "ROI %", "Margin", "Volume", "Max Profit"],
-            label_visibility="collapsed",
-            key="scanner_sort",
-        )
-        sort_map = {
-            "Smart Score":  "smart_score",
-            "ROI %":        "roi",
-            "Margin":       "margin",
-            "Volume":       "vol_1h",
-            "Max Profit":   "pot_profit",
-        }
-        df_view = df_view.sort_values(sort_map[sort_col], ascending=False).reset_index(drop=True)
 
-    st.markdown("<div style='height:0.4rem;'></div>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin: 8px 0;'/>", unsafe_allow_html=True)
 
-    # ── Two-column layout ─────────────────────────────────────────────────
-    col_list, col_detail = st.columns([4, 6], gap="large")
+    # ── Layout ───────────────────────────────────────────────────────────
+    col_list, col_detail = st.columns([1, 1.3], gap="large")
 
     with col_list:
-        section_label("Market Scanner")
+        section_label("Live Opportunities")
+        
+        # 1. Maak een kopie om waarschuwingen te voorkomen
+        df_display = df_view.head(100).copy()
+        
+        # 2. Voeg een simpele indexering toe (1, 2, 3...)
+        df_display.insert(0, "#", range(1, len(df_display) + 1))
+        
+        # 3. Voeg een Override indicator toe ("🛠️") als visuele hint
+        df_display["OVR"] = df_display["has_override"].apply(lambda x: "🛠️" if x else "")
 
-        # Build display table
-        df_table = df_view.head(50).copy()
-        df_table["#"]          = df_table.index + 1
-        df_table["Item"]       = df_table["name"]
-        df_table["Margin"]     = df_table["margin"].apply(lambda v: fmt_gp(v, short=True))
-        df_table["ROI"]        = df_table["roi"].apply(fmt_pct)
-        df_table["Vol 1h"]     = df_table["vol_1h"].apply(lambda v: f"{int(v):,}")
-        df_table["Max Profit"] = df_table["pot_profit"].apply(lambda v: fmt_gp(v, short=True))
-        df_table["Score"]      = df_table["smart_score"].apply(lambda v: f"{v:.3f}")
-        df_table["OVR"]        = df_table["has_override"].apply(lambda v: "✎" if v else "")
+        # 4. Formatteer de kolommen voor de weergave (We gebruiken de JUISTE keys uit core.py)
+        # We maken nieuwe string-kolommen aan voor weergave, originele data blijft behouden voor details
+        df_display["Item"]       = df_display["Naam"]
+        df_display["Margin"]     = df_display["margin"].apply(lambda v: fmt_gp(v, short=True))
+        df_display["ROI"]        = df_display["roi"].apply(fmt_pct)
+        df_display["Vol 1h"]     = df_display["vol_1h"].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "0")
+        df_display["Max Profit"] = df_display["pot_profit"].apply(lambda v: fmt_gp(v, short=True))
+        df_display["Score"]      = df_display["smart_score"].apply(lambda x: f"{int(x):,}")
 
-        display_cols = ["#", "Item", "Margin", "ROI", "Vol 1h", "Max Profit", "Score", "OVR"]
+        # 5. Selecteer alleen de kolommen die we willen zien
+        show_cols = ["#", "Item", "Margin", "ROI", "Vol 1h", "Max Profit", "Score", "OVR"]
+        df_table = df_display[show_cols]
 
-        # Use Streamlit's dataframe with single-row selection
+        # 6. Render the interactive dataframe
         event = st.dataframe(
-            df_table[display_cols],
+            df_table,
             use_container_width=True,
             hide_index=True,
-            height=600,
             on_select="rerun",
             selection_mode="single-row",
             column_config={
@@ -109,7 +90,8 @@ def render(df_all: pd.DataFrame, prof: dict) -> None:
         # Track selected row
         sel_rows = event.selection.rows if event.selection else []
         if sel_rows:
-            st.session_state.sel_item_id = int(df_view.iloc[sel_rows[0]]["id"])
+            # df_display heeft exact dezelfde volgorde en lengte als df_table
+            st.session_state.sel_item_id = int(df_display.iloc[sel_rows[0]]["id"])
 
     with col_detail:
         section_label("Item Detail")
@@ -124,8 +106,5 @@ def render(df_all: pd.DataFrame, prof: dict) -> None:
                 row = df_view.iloc[0]
         elif not df_view.empty:
             row = df_view.iloc[0]
-        else:
-            st.info("Select an item from the scanner to view details.")
-            return
-
+            
         render_item_detail(row, prof)
