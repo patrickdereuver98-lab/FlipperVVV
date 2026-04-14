@@ -54,7 +54,7 @@ st_autorefresh(interval=60_000, key="osrs_api_refresh")
 prof = session.init()
 
 # ── Sidebar: capital management + account filter ───────────────────────────────
-free, acc_type = sidebar.render(prof)
+free, acc_type, sector = sidebar.render(prof)
 
 # ── API polling ────────────────────────────────────────────────────────────────
 st.session_state.api_error = None
@@ -77,6 +77,7 @@ df_all = core.compute_flips(
     vol1h        = vol_1h,
     free_cash    = free,
     acc_type     = acc_type,
+    sector       = sector,         # <-- FIX: sector doorgegeven aan de motor
     cooldowns    = prof["cooldowns"],
     overrides    = prof["overrides"],
 )
