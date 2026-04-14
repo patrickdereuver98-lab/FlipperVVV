@@ -21,8 +21,8 @@ _INCREMENTS = [
 ]
 
 
-def render(prof: dict) -> tuple[int, str]:
-    """Render the sidebar. Returns (free_cash: int, acc_type: str)."""
+def render(prof: dict) -> tuple[int, str, str]:
+    """Render the sidebar. Returns (free_cash: int, acc_type: str, sector: str)."""
 
     with st.sidebar:
 
@@ -143,12 +143,18 @@ def render(prof: dict) -> tuple[int, str]:
 
         st.markdown("<div style='height:0.8rem;'></div>", unsafe_allow_html=True)
 
-        # ── Account filter ────────────────────────────────────────────────
-        section_label("Filter")
+        # ── Filters ───────────────────────────────────────────────────────
+        section_label("Filters")
+        
+        sector = st.selectbox(
+            "Trade Sector",
+            ["Alle Markten", "High-Volume Supplies", "High-Value Gear"],
+            key="sb_sector",
+        )
+        
         acc_type = st.selectbox(
-            "account_filter",
+            "Account Status",
             ["F2P + Members", "Alleen Members", "Alleen F2P"],
-            label_visibility="collapsed",
             key="sb_acc_type",
         )
 
@@ -167,4 +173,4 @@ def render(prof: dict) -> tuple[int, str]:
                 unsafe_allow_html=True,
             )
 
-    return free, acc_type
+    return free, acc_type, sector
