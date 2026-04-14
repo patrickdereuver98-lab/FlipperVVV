@@ -57,8 +57,7 @@ def render(prof: dict) -> tuple[int, str, str]:
                 unsafe_allow_html=True,
             )
             # Invisible button overlay for click detection
-            if st.button(lbl, key=f"nav_{page_key}", use_container_width=True,
-                         label_visibility="collapsed"):
+            if st.button(lbl, key=f"nav_{page_key}", use_container_width=True):
                 st.session_state.page = page_key
                 st.rerun()
 
