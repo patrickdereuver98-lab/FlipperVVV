@@ -74,17 +74,17 @@ def render(prof: dict) -> tuple[int, str, str]:
         if "raw_cash" not in st.session_state:
             st.session_state.raw_cash = 25_000_000
 
-        # Text input (compact, mono font via CSS)
+        # DE FIX: Geen key="sb_cash_input" meer, we sturen dit puur via 'value'
         cash_str = st.text_input(
             "cash",
             value=fmt_gp(st.session_state.raw_cash, short=True),
-            key="sb_cash_input",
             label_visibility="collapsed",
             placeholder="e.g. 250m",
         )
         parsed = parse_osrs_gp(cash_str)
         if parsed != st.session_state.raw_cash and parsed >= 0:
             st.session_state.raw_cash = parsed
+            st.rerun() # Forceer direct een update zodat de weergave niet blijft hangen
 
         # Quick-add row — 4 buttons in one line
         q1, q2, q3, q4 = st.columns(4)
