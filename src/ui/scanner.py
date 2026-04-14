@@ -94,7 +94,7 @@ def _render_hero(r: pd.Series, rank: int, total: int, prof: dict) -> None:
                   </div>
                   <div style="font-size:1.2rem; color:var(--text-muted); padding:0 15px;">−</div>
                   <div style="flex:1;">
-                    <div style="font-size:0.7rem; color:var(--red); text-transform:uppercase;">GE Tax (1%)</div>
+                    <div style="font-size:0.7rem; color:var(--red); text-transform:uppercase;">GE Tax (2%)</div>
                     <div style="font-size:1.1rem; font-weight:600; color:var(--red);">-{fmt_gp(r['tax'])}</div>
                   </div>
                   <div style="font-size:1.2rem; color:var(--text-muted); padding:0 15px;">=</div>
