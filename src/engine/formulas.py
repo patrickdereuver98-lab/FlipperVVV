@@ -159,3 +159,29 @@ def evaluate_active_flip(
         statuses.append(("OK",        "Positie competitief", None))
 
     return statuses, current_margin
+
+def parse_osrs_gp(val) -> int:
+    """
+    Slimme parser voor OSRS GP. 
+    Zet strings zoals '2.5b', '100m', of '500k' direct om in integers.
+    """
+    if isinstance(val, int): 
+        return val
+    if not val: 
+        return 0
+        
+    val = str(val).lower().replace(',', '').replace(' ', '')
+    multipliers = {'k': 1e3, 'm': 1e6, 'b': 1e9}
+    
+    for suffix, mult in multipliers.items():
+        if val.endswith(suffix):
+            try: 
+                return int(float(val[:-1]) * mult)
+            except ValueError: 
+                return 0
+                
+    try: 
+        return int(float(val))
+    except ValueError: 
+        return 0
+    
