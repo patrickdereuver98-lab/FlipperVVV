@@ -57,7 +57,7 @@ def render(df_all: pd.DataFrame, prof: dict) -> None:
 
         # 4. Formatteer de kolommen voor de weergave (We gebruiken de JUISTE keys uit core.py)
         # We maken nieuwe string-kolommen aan voor weergave, originele data blijft behouden voor details
-        df_display["Item"]       = df_display["Name"]
+        df_display["Item"]       = df_display["name"]
         df_display["Margin"]     = df_display["margin"].apply(lambda v: fmt_gp(v, short=True))
         df_display["ROI"]        = df_display["roi"].apply(fmt_pct)
         df_display["Vol 1h"]     = df_display["vol_1h"].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "0")
