@@ -96,81 +96,28 @@ def _render_hero(r: pd.Series, rank: int, total: int, prof: dict) -> None:
         invest_str  = fmt_gp(r["invest"], short=True)
         vol_display = f"{int(r['vol_1h']):,}" if r["vol_1h"] > 0 else f"~{int(r['vol_5m']):,}/5m"
 
-        st.markdown(
-            f"""
-            <div class="hero-card">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
-                <div class="hero-rank">🏆 Rank #{rank + 1} of {total} &nbsp;·&nbsp; Top Pick for Your Stack</div>
-                <div style="font-size:0.68rem; color:{T['text_muted']}; font-family:monospace;">
-                  {"● " * min(rank+1, 5)}{"○ " * max(0, 5 - rank - 1)}
-                </div>
-              </div>
+    # Zoek in de _render_hero functie naar de stat-grid en vervang deze:
+st.markdown(f"""
+<div class="hero-stat-grid">
+    <div class="hero-stat">
+        <div class="hero-stat-label">Instap (Low+1)</div>
+        <div class="hero-stat-val">{fmt_gp(r['buy_p'])}</div>
+    </div>
+    <div class="hero-stat">
+        <div class="hero-stat-label">Verkoop (High-1)</div>
+        <div class="hero-stat-val">{fmt_gp(r['sell_p'])}</div>
+    </div>
+    <div class="hero-stat">
+        <div class="hero-stat-label" style="color:var(--red);">GE Tax (1% cap 5M)</div>
+        <div class="hero-stat-val" style="color:var(--red);">-{fmt_gp(r['tax'])}</div>
+    </div>
+    <div class="hero-stat">
+        <div class="hero-stat-label" style="color:var(--green);">Netto Winst p/st</div>
+        <div class="hero-stat-val" style="color:var(--green);">{fmt_gp(r['net_profit_per_item'])}</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-              <div style="display:flex; align-items:center; margin-bottom:0.5rem;">
-                {icon_html}
-                <div>
-                  <div class="hero-name">{r["name"]} {override_pill}</div>
-                  <div class="hero-sub">
-                    {member_pill} &nbsp;
-                    <a href="{wiki_url}" target="_blank" style="color:{T['blue']}; text-decoration:none; font-size:0.75rem;">↗ Wiki</a>
-                    &nbsp;·&nbsp; GE Limit: <span style="font-family:monospace;">{int(r["ge_lim_fixed"]):,}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div class="hero-profit">{fmt_gp(r["pot_profit"])}</div>
-                <div class="hero-profit-label">Max Potential Profit &nbsp;·&nbsp; {int(r["qty"]):,} units × {fmt_gp(r["margin"])} margin</div>
-              </div>
-
-              <div class="hero-stat-grid">
-                <div class="hero-stat">
-                  <div class="hero-stat-label">Buy (instasell)</div>
-                  <div class="hero-stat-value">{fmt_gp(r["buy_p"])}</div>
-                </div>
-                <div class="hero-stat">
-                  <div class="hero-stat-label">Sell (instabuy)</div>
-                  <div class="hero-stat-value">{fmt_gp(r["sell_p"])}</div>
-                </div>
-                <div class="hero-stat">
-                  <div class="hero-stat-label">GE Tax (p/st)</div>
-                  <div class="hero-stat-value" style="color:{T['red']};">-{fmt_gp(r["tax"])}</div>
-                </div>
-                <div class="hero-stat">
-                  <div class="hero-stat-label">Net Margin</div>
-                  <div class="hero-stat-value" style="color:{T['green']};">{fmt_gp(r["margin"])}</div>
-                </div>
-                <div class="hero-stat">
-                  <div class="hero-stat-label">ROI</div>
-                  <div class="hero-stat-value" style="color:{roi_color};">{fmt_pct(r["roi"])}</div>
-                </div>
-                <div class="hero-stat">
-                  <div class="hero-stat-label">Capital Required</div>
-                  <div class="hero-stat-value">{invest_str}</div>
-                </div>
-                <div class="hero-stat">
-                  <div class="hero-stat-label">Volume (1h)</div>
-                  <div class="hero-stat-value">{vol_display}</div>
-                </div>
-              </div>
-
-              <div style="margin-top:0.85rem; display:flex; align-items:center; gap:1rem;">
-                <div style="flex:1;">
-                  <div style="font-size:0.62rem; color:{T['text_muted']}; text-transform:uppercase; letter-spacing:0.08em; font-weight:700; margin-bottom:3px;">Data Freshness</div>
-                  {_freshness_bar(freshness_pct)}
-                </div>
-                <div style="text-align:right;">
-                  <div style="font-size:0.62rem; color:{T['text_muted']}; text-transform:uppercase; letter-spacing:0.08em; font-weight:700; margin-bottom:3px;">Price Age</div>
-                  <div style="font-size:0.75rem;">
-                    Low: <span class="{_age_class(r['low_ts'])}">{fmt_age(r['low_ts'])}</span>
-                    &nbsp;·&nbsp;
-                    High: <span class="{_age_class(r['high_ts'])}">{fmt_age(r['high_ts'])}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
         )
 
         # ── Price chart (inside card_col, below the HTML card) ─────────
