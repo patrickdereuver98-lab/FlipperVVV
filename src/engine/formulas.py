@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-GE_TAX_RATE       = 0.01
+GE_TAX_RATE       = 0.02
 GE_TAX_CAP        = 5_000_000
 GE_TAX_THRESHOLD  = 500_000_000
 GE_COOLDOWN_HOURS = 4          # GE buy limit resets every 4 hours
