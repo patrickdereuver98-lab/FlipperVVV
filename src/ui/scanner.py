@@ -99,7 +99,6 @@ def _render_hero(r: pd.Series, rank: int, total: int, prof: dict) -> None:
         st.markdown(
             f"""
             <div class="hero-card">
-              <!-- Top bar: rank + nav indicator -->
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
                 <div class="hero-rank">🏆 Rank #{rank + 1} of {total} &nbsp;·&nbsp; Top Pick for Your Stack</div>
                 <div style="font-size:0.68rem; color:{T['text_muted']}; font-family:monospace;">
@@ -107,7 +106,6 @@ def _render_hero(r: pd.Series, rank: int, total: int, prof: dict) -> None:
                 </div>
               </div>
 
-              <!-- Item header -->
               <div style="display:flex; align-items:center; margin-bottom:0.5rem;">
                 {icon_html}
                 <div>
@@ -120,13 +118,11 @@ def _render_hero(r: pd.Series, rank: int, total: int, prof: dict) -> None:
                 </div>
               </div>
 
-              <!-- Big profit number -->
               <div>
                 <div class="hero-profit">{fmt_gp(r["pot_profit"])}</div>
                 <div class="hero-profit-label">Max Potential Profit &nbsp;·&nbsp; {int(r["qty"]):,} units × {fmt_gp(r["margin"])} margin</div>
               </div>
 
-              <!-- Stat grid -->
               <div class="hero-stat-grid">
                 <div class="hero-stat">
                   <div class="hero-stat-label">Buy (instasell)</div>
@@ -135,6 +131,10 @@ def _render_hero(r: pd.Series, rank: int, total: int, prof: dict) -> None:
                 <div class="hero-stat">
                   <div class="hero-stat-label">Sell (instabuy)</div>
                   <div class="hero-stat-value">{fmt_gp(r["sell_p"])}</div>
+                </div>
+                <div class="hero-stat">
+                  <div class="hero-stat-label">GE Tax (p/st)</div>
+                  <div class="hero-stat-value" style="color:{T['red']};">-{fmt_gp(r["tax"])}</div>
                 </div>
                 <div class="hero-stat">
                   <div class="hero-stat-label">Net Margin</div>
@@ -154,7 +154,6 @@ def _render_hero(r: pd.Series, rank: int, total: int, prof: dict) -> None:
                 </div>
               </div>
 
-              <!-- Freshness row -->
               <div style="margin-top:0.85rem; display:flex; align-items:center; gap:1rem;">
                 <div style="flex:1;">
                   <div style="font-size:0.62rem; color:{T['text_muted']}; text-transform:uppercase; letter-spacing:0.08em; font-weight:700; margin-bottom:3px;">Data Freshness</div>
