@@ -1,133 +1,144 @@
+"""
+session.py — Streamlit session state management.
+
+Manages multi-account profiles, capital tracking, and GE cooldown state.
+Each profile is isolated: its own watchlist, active slots, history, and overrides.
+"""
 import time
-import math
-import numpy as np
-import pandas as pd
-from datetime import datetime, timezone
+import streamlit as st
 
-GE_TAX_RATE = 0.01
-WIKI_ICON_URL = "https://oldschool.runescape.wiki/images/{}"
-WIKI_ITEM_URL = "https://oldschool.runescape.wiki/w/{}"
+# ── Profile schema ─────────────────────────────────────────────────────────────
+def _empty_profile(name: str = "Main") -> dict:
+    return {
+        "name":         name,
+        "active_flips": {},   # {str(item_id): FlipEntry}
+        "watchlist":    [],   # [str(item_id), ...]
+        "history":      [],   # [HistoryEntry, ...]
+        "cooldowns":    {},   # {str(item_id): {qty, timestamp}}
+        "overrides":    {},   # {str(item_id): {buy, sell}}
+    }
 
-def parse_osrs_gp(val) -> int:
-    # Nu robuuster: accepteert zowel strings als integers
-    if isinstance(val, int): return val
-    if not val: return 0
-    val = str(val).lower().replace(',', '').replace(' ', '')
-    multipliers = {'k': 1e3, 'm': 1e6, 'b': 1e9}
-    for suffix, mult in multipliers.items():
-        if val.endswith(suffix):
-            try: return int(float(val[:-1]) * mult)
-            except: return 0
-    try: return int(float(val))
-    except: return 0
 
-def ge_tax(sell_price: int) -> int:
-    if sell_price >= 500_000_000: return 5_000_000
-    return int(math.floor(sell_price * GE_TAX_RATE))
+# ── Initialisation ─────────────────────────────────────────────────────────────
+def init() -> dict:
+    """
+    Initialise all required session state keys.
+    Returns the currently active profile dict.
+    """
+    if "profiles" not in st.session_state:
+        st.session_state.profiles = {
+            "Main":      _empty_profile("Main"),
+            "Alt":       _empty_profile("Alt"),
+        }
+    if "active_profile" not in st.session_state:
+        st.session_state.active_profile = "Main"
+    if "raw_cash" not in st.session_state:
+        st.session_state.raw_cash = 25_000_000   # Default: 25M
+    if "last_api_ts" not in st.session_state:
+        st.session_state.last_api_ts = None
+    if "sel_item_id" not in st.session_state:
+        st.session_state.sel_item_id = None      # Currently selected item in scanner
+    if "watch_item_id" not in st.session_state:
+        st.session_state.watch_item_id = None    # Currently selected item in watchlist
+    if "api_error" not in st.session_state:
+        st.session_state.api_error = None
 
-def fmt(v, short=False) -> str:
-    if pd.isna(v) or v is None: return "—"
-    v = int(v)
-    if short:
-        if abs(v) >= 1_000_000_000: return f"{v/1e9:.2f}B"
-        if abs(v) >= 1_000_000:     return f"{v/1e6:.2f}M"
-        if abs(v) >= 1_000:         return f"{v/1e3:.1f}K"
-        return f"{v:,}"
-    return f"{v:,}"
+    return active_profile()
 
-def fmtp(v) -> str: return f"{v:.2f}%"
 
-def get_age_seconds(ts) -> int:
-    if not ts or pd.isna(ts): return 999999
-    return int(time.time()) - int(ts)
+def active_profile() -> dict:
+    """Return the currently active profile dict."""
+    return st.session_state.profiles[st.session_state.active_profile]
 
-def age_s(ts) -> str:
-    d = get_age_seconds(ts)
-    if d == 999999: return "?"
-    if d < 60: return f"{d}s"
-    if d < 3600: return f"{d//60}m"
-    return f"{d//3600}u"
 
-def fmt_ts(ts) -> str:
-    if not ts: return "—"
-    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%H:%M UTC")
+def add_profile(name: str) -> None:
+    if name and name not in st.session_state.profiles:
+        st.session_state.profiles[name] = _empty_profile(name)
 
-def evaluate_active_flip(my_buy, my_sell, live_low, live_high):
-    status = []
-    if live_low > my_buy: status.append(("🔴 OUTBID", "Verhoog buy-offer", live_low + 1))
-    if live_high < my_sell: status.append(("🔴 UNDERCUT", "Verlaag sell-offer", live_high - 1))
-    
-    current_margin = (live_high - 1) - ge_tax(live_high - 1) - (live_low + 1)
-    if current_margin <= 0: status.append(("🚨 ABORT", "Margin is gecrasht!", None))
-    if not status: status.append(("🟢 PERFECT", "Positie is competitief", None))
-    return status, current_margin
 
-def compute_flips_vectorized(mapping, latest, vol5m, vol1h, free_cash, acc_type, active_cooldowns, manual_overrides, min_margin=100, min_vol=5):
-    # Hardcoded background filters voor een schone UI
-    min_roi = 0.1 
-    max_buy_price = free_cash # Je mag in theorie je hele stack aan 1 item uitgeven
+def delete_profile(name: str) -> None:
+    if name in st.session_state.profiles and len(st.session_state.profiles) > 1:
+        del st.session_state.profiles[name]
+        st.session_state.active_profile = list(st.session_state.profiles.keys())[0]
 
-    # 1. Razendsnelle extractie naar platte data
-    data = []
-    for sid, px in latest.items():
-        iid = int(sid)
-        info = mapping.get(iid)
-        if not info or not px.get('high') or not px.get('low'): continue
-        
-        data.append({
-            'id': iid, 'Naam': info.get('name', '?'), 'icon': info.get('icon', ''),
-            'examine': info.get('examine', ''), 'members': info.get('members', False),
-            'ge_lim': info.get('limit', 0), 'high': px['high'], 'low': px['low'],
-            'high_ts': px.get('highTime', 0), 'low_ts': px.get('lowTime', 0),
-            'vol_5m': vol5m.get(sid, {}).get('highPriceVolume', 0) + vol5m.get(sid, {}).get('lowPriceVolume', 0),
-            'vol_1h': vol1h.get(sid, {}).get('highPriceVolume', 0) + vol1h.get(sid, {}).get('lowPriceVolume', 0)
-        })
 
-    if not data: return pd.DataFrame()
-    df = pd.DataFrame(data)
+# ── Capital helpers ────────────────────────────────────────────────────────────
+def total_cash() -> int:
+    return st.session_state.raw_cash
 
-    # 2. Vectorized Filters & Overrides
-    if acc_type == "Alleen F2P": df = df[~df['members']]
-    elif acc_type == "Alleen Members": df = df[df['members']]
 
-    df['buy_p'] = df['low'] + 1
-    df['sell_p'] = df['high'] - 1
-    df['has_override'] = False
+def locked_cash(prof: dict) -> int:
+    """Capital currently tied up in open trades."""
+    return sum(
+        f["qty"] * f["buy_p"]
+        for f in prof["active_flips"].values()
+    )
 
-    if manual_overrides:
-        for iid_str, ov in manual_overrides.items():
-            mask = df['id'] == int(iid_str)
-            if mask.any():
-                df.loc[mask, 'buy_p'] = ov['buy']
-                df.loc[mask, 'sell_p'] = ov['sell']
-                df.loc[mask, 'has_override'] = True
 
-    df = df[df['sell_p'] > df['buy_p']]
+def free_cash(prof: dict) -> int:
+    return max(0, total_cash() - locked_cash(prof))
 
-    # 3. Vectorized Math (Fiscaal & Liquiditeit)
-    df['tax'] = np.where(df['sell_p'] >= 500_000_000, 5_000_000, np.floor(df['sell_p'] * GE_TAX_RATE).astype(int))
-    df['margin'] = df['sell_p'] - df['tax'] - df['buy_p']
-    
-    smart_min_margin = max(min_margin, int(free_cash * 0.00001)) if free_cash > 10_000_000 else min_margin
-    df = df[df['margin'] >= smart_min_margin]
 
-    df['roi'] = (df['margin'] / df['buy_p']) * 100
-    df = df[(df['roi'] >= min_roi) & (df['buy_p'] <= max_buy_price)]
+# ── Slot management ────────────────────────────────────────────────────────────
+MAX_SLOTS = 8
 
-    df['vol_use'] = np.where(df['vol_1h'] > 0, df['vol_1h'], df['vol_5m'])
-    df = df[df['vol_use'] >= min_vol]
 
-    used_qty_series = df['id'].astype(str).map(lambda x: active_cooldowns.get(x, {}).get('qty', 0)).fillna(0)
-    df['ge_lim_fixed'] = np.where(df['ge_lim'] > 0, df['ge_lim'], 50_000)
-    df['remaining_lim'] = df['ge_lim_fixed'] - used_qty_series
-    
-    df = df[df['remaining_lim'] > 0]
-    df['max_aff'] = (free_cash // df['buy_p']).astype(int)
-    df['qty'] = df[['max_aff', 'remaining_lim']].min(axis=1)
-    df = df[df['qty'] > 0]
+def add_to_slots(prof: dict, row: dict) -> bool:
+    """
+    Add an item to the active flip slots.
+    Returns True on success, False if slots are full.
+    """
+    iid_str = str(int(row["id"]))
+    if len(prof["active_flips"]) >= MAX_SLOTS:
+        return False
+    prof["active_flips"][iid_str] = {
+        "name":    row["name"],
+        "qty":     int(row["qty"]),
+        "buy_p":   int(row["buy_p"]),
+        "sell_p":  int(row["sell_p"]),
+        "added_ts": int(time.time()),
+    }
+    return True
 
-    df['pot_profit'] = df['qty'] * df['margin']
-    df['invest'] = df['qty'] * df['buy_p']
-    df['smart_score'] = df['pot_profit'] * (df['roi'] / 100) * np.log10(df['vol_use'] + 1)
 
-    return df
+def close_flip(
+    prof:     dict,
+    iid_str:  str,
+    qty:      int,
+    buy_p:    int,
+    sell_p:   int,
+) -> dict:
+    """
+    Record a completed flip in the ledger, update the cooldown,
+    and remove it from active slots.
+    Returns the history entry dict.
+    """
+    from src.engine.formulas import ge_tax
+    tax_paid = qty * ge_tax(sell_p)
+    net_profit = (qty * sell_p) - tax_paid - (qty * buy_p)
+    invest = qty * buy_p
+
+    entry = {
+        "ts":           int(time.time()),
+        "name":         prof["active_flips"][iid_str]["name"],
+        "qty":          qty,
+        "buy_p":        buy_p,
+        "sell_p":       sell_p,
+        "invest":       invest,
+        "tax_paid":     tax_paid,
+        "net_profit":   net_profit,
+        "roi":          (net_profit / invest * 100) if invest > 0 else 0.0,
+    }
+    prof["history"].append(entry)
+
+    # Update 4h cooldown: extend qty used
+    prev = prof["cooldowns"].get(iid_str, {})
+    from src.engine.formulas import GE_COOLDOWN_HOURS, cooldown_remaining_qty
+    still_locked = cooldown_remaining_qty(prev)
+    prof["cooldowns"][iid_str] = {
+        "qty":       still_locked + qty,
+        "timestamp": int(time.time()),
+    }
+
+    del prof["active_flips"][iid_str]
+    return entry
