@@ -19,15 +19,14 @@ TWO scoring columns are produced:
   action_score  (capital-aware action ranking)
   ─────────────────────────────────────────────────
   Answers: "What is the best trade I can do RIGHT NOW with my cash?"
-  Deliberately capital-dependent — pot_profit reflects YOUR available qty.
+  Deliberately capital-dependent — balances total profit with slot efficiency
+  and heavily penalises illiquid items via volume-capping.
 
-    norm_profit  = pot_profit / max(pot_profit)   # 0..1 relative to the set
-    norm_smart   = smart_score / max(smart_score)  # 0..1 normalised quality
-    action_score = 0.55 × norm_profit + 0.45 × norm_smart
+    norm_margin  = margin / max(margin)           # 40% - Favors 'Big Fish' (high profit per item)
+    norm_profit  = real_profit / max(real_profit) # 40% - Favors volume stack value (volume-capped)
+    norm_smart   = smart_score / max(smart_score) # 20% - Favors quality and data freshness
 
-  Weights: profit-pull (55%) + quality-pull (45%).
-  This ensures the Hero Card always surfaces the absolute best GP opportunity
-  for the current cash, while quality keeps garbage-margin items out.
+    action_score = 0.40 × norm_margin + 0.40 × norm_profit + 0.20 × norm_smart
 
   Used by: Scanner Hero Card, Runner-up feed.
 """
@@ -166,7 +165,7 @@ def compute_flips(
     df["remaining_lim"] = df.apply(_remaining, axis=1)
     df = df[df["remaining_lim"] > 0].copy()
 
-    # ── 8. Capital allocation ──────────────────────────────────────────────
+    # ── 8. Capital allocation & Realistic Volume Capping ───────────────────
     if free_cash > 0:
         df["max_aff"] = np.minimum(
             (free_cash // df["buy_p"]).astype(int),
@@ -175,9 +174,14 @@ def compute_flips(
     else:
         df["max_aff"] = 0
 
-    df["qty"]        = df["max_aff"].clip(lower=0)
-    df["pot_profit"] = df["qty"] * df["margin"]
-    df["invest"]     = df["qty"] * df["buy_p"]
+    df["qty"] = df["max_aff"].clip(lower=0)
+    
+    # CRUCIAAL: Volume-trap fix. Je kunt nooit meer verhandelen dan het uurs-volume.
+    df["real_qty"] = np.minimum(df["qty"], df["vol_use"])
+
+    df["pot_profit"]  = df["qty"] * df["margin"]       # Theoretische max (bijv. voor UI weergave)
+    df["real_profit"] = df["real_qty"] * df["margin"]  # Haalbare winst voor de algoritme-ranking
+    df["invest"]      = df["qty"] * df["buy_p"]
 
     # ── 9. Freshness ───────────────────────────────────────────────────────
     df["freshness"] = df.apply(
@@ -192,22 +196,24 @@ def compute_flips(
 
     df["smart_score"] = roi_decimal * vol_score * depth_score * df["freshness"]
 
-    # ── 11. Action Score — capital-aware, hero card ranking ────────────────
-    #
-    # Normalise both signals to [0, 1] so neither dominates by scale.
-    # Then blend: 55% weight on raw profit (GP you CAN make now) + 45% quality.
-    #
-    # Why 55/45?  The user asked for "ruwe winst … moet prioriteit krijgen"
-    # but we still want quality to prevent a 1gp-margin high-qty item from
-    # dominating just because pot_profit is large.
-    #
-    max_profit = df["pot_profit"].max()
-    max_smart  = df["smart_score"].max()
+    # ── 11. Action Score — volume-bound, capital-aware ranking ─────────────
+    if not df.empty:
+        max_margin      = df["margin"].max()
+        max_real_profit = df["real_profit"].max() 
+        max_smart       = df["smart_score"].max()
 
-    norm_profit = df["pot_profit"]    / max_profit if max_profit > 0 else 0
-    norm_smart  = df["smart_score"]   / max_smart  if max_smart  > 0 else 0
+        # Normaliseer naar een schaal van 0-1
+        norm_margin = df["margin"]      / max_margin      if max_margin > 0 else 0
+        norm_profit = df["real_profit"] / max_real_profit if max_real_profit > 0 else 0
+        norm_smart  = df["smart_score"] / max_smart       if max_smart  > 0 else 0
 
-    df["action_score"] = 0.55 * norm_profit + 0.45 * norm_smart
+        # Eindbaas Weging:
+        # 40% Margin per stuk (Zoekt de 'Big Fish' - efficiënt gebruik van slots)
+        # 40% Real Profit (Echte, haalbare winst gemaximeerd op volume)
+        # 20% Smart Score (Intrinsieke kwaliteit en betrouwbaarheid van de data)
+        df["action_score"] = (0.40 * norm_margin) + (0.40 * norm_profit) + (0.20 * norm_smart)
+    else:
+        df["action_score"] = 0
 
     # ── 12. Final sanity filter ────────────────────────────────────────────
     df = df[df["buy_p"] > 0].copy()
