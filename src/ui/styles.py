@@ -55,7 +55,12 @@ html, body, .stApp {
     font-size: 14px;
 }
 
-#MainMenu, footer, header { visibility: hidden !important; }
+#MainMenu, footer { visibility: hidden !important; }
+/* Verberg de header-balk, maar laat de knoppen (zoals de sidebar-toggle) bruikbaar */
+header { 
+    background-color: transparent !important; 
+    border: none !important;
+}
 
 .block-container {
     padding-top: 1.2rem !important;
