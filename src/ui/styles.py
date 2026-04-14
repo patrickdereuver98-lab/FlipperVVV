@@ -170,7 +170,6 @@ input:focus, [data-baseweb="input"] input:focus {
     border-radius: var(--radius-lg) !important;
     overflow: hidden !important;
 }
-.dvn-scroller { background-color: var(--panel) !important; }
 
 /* ── Metrics ──────────────────────────────────────────────────────────────── */
 [data-testid="stMetric"] {
